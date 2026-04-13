@@ -191,7 +191,28 @@ def getToken(imprime: bool = True):
                 print(f"{lineno}\t{token}\t= '{tokenString}'")
             return token, tokenString
 
-        elif prev_state != 0:
+        elif prev_state == 2 and bad_char.isdigit():
+            # exclamation mark alone → error
+            line_start  = programa.rfind('\n', 0, posicion) + 1
+            line_end    = programa.find('\n', posicion)
+            if line_end == -1:
+                line_end = progLong
+            source_line = programa[line_start:line_end]
+            col_in_line = posicion - line_start
+
+            print(f"\nLínea {lineno}: Error lexico, exclamacion debe llevar un signo igual despues: '{lexema}{bad_char}'")
+            print(source_line)
+            print(' ' * col_in_line + '^')
+
+            posicion   += 1
+            token       = TokenType.ERROR
+            tokenString = lexema + bad_char
+            if imprime:
+                print(f"{lineno}\t{token}\t= '{tokenString}'")
+            return token, tokenString
+
+
+        elif prev_state in (1,2):
             # We were mid-token (NUM or ID) and hit an invalid continuation.
             # The lexema is already built; resolve the token type normally.
             token = ACCEPTING_STATE_TOKEN.get(

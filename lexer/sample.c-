@@ -1,9 +1,10 @@
 /* Un programa para realizar el algoritmo
    de Euclides para calcular mcd. $*/
 
-3abcd
 int gcd (int u, in3t v)
 { 
+    !
+    .
     if (v == 0) return u ;
     else return gcd(v, u-u/v*v);
     /* u-u/v*v == u mod v */
