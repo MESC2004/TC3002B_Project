@@ -152,6 +152,7 @@ def getToken(imprime: bool = True):
         bad_char = programa[posicion]
 
         if prev_state == 1 and bad_char.isalpha():
+            # num formation error
             line_start = programa.rfind('\n', 0, posicion) + 1
             line_end = programa.rfind('\n', posicion)
             if line_end == -1:
@@ -191,7 +192,7 @@ def getToken(imprime: bool = True):
                 print(f"{lineno}\t{token}\t= '{tokenString}'")
             return token, tokenString
 
-        elif prev_state == 2 and bad_char.isdigit():
+        elif prev_state == 9:
             # exclamation mark alone → error
             line_start  = programa.rfind('\n', 0, posicion) + 1
             line_end    = programa.find('\n', posicion)
