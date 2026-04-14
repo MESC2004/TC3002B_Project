@@ -1,5 +1,5 @@
 /* Un programa para realizar el algoritmo
-   de Euclides para calcular mcd. $*/
+   de Euclides para calcular mcd. */
 
 int gcd (int u, in3t v)
 { 

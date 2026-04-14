@@ -116,155 +116,160 @@ def getToken(imprime: bool = True):
     """
     global posicion, lineno
 
-    state      = 0
-    lexema     = ''  # accumulate the lexeme character by character
-    token      = None
+    while True:
+        state      = 0
+        lexema     = ''  # accumulate the lexeme character by character
+        token      = None
 
-    prev_state = 0   # track where we came from
-    while state not in ACCEPTING_STATE_TOKEN:
-        c   = programa[posicion]
-        col = _col(c) # obtained from the abstracted helper function
-        next_state = TABLE[state][col]
+        prev_state = 0   # track where we came from
+        while state not in ACCEPTING_STATE_TOKEN:
+            c   = programa[posicion]
+            col = _col(c) # obtained from the abstracted helper function
+            next_state = TABLE[state][col]
 
-        in_comment = state in (5, 6)   # inside /* … */
+            in_comment = state in (5, 6)   # inside /* … */
 
-        if next_state in UNGET_STATES:
-            # CLAUDE FEEDBACK OPTIMIZATION
-            # The current char caused us to leave the token – put it back.
-            # Do NOT advance posicion; do NOT accumulate c. (no +1)
+            if next_state in UNGET_STATES:
+                # CLAUDE FEEDBACK OPTIMIZATION
+                # The current char caused us to leave the token – put it back.
+                # Do NOT advance posicion; do NOT accumulate c. (no +1)
+                prev_state = state
+                state = next_state
+                break
+
+            # Advance and optionally accumulate
+            posicion += 1
+
+            if not (state == 0 and c in (' ', '\t', '\n')) and not in_comment:
+                # skip whitespace, accumulate otherwise
+                lexema += c
+            if c == '\n':
+                lineno += 1
+
             prev_state = state
             state = next_state
-            break
 
-        # Advance and optionally accumulate
-        posicion += 1
-
-        if not (state == 0 and c in (' ', '\t', '\n')) and not in_comment:
-            # skip whitespace, accumulate otherwise
-            lexema += c
-        if c == '\n':
-            lineno += 1
-
-        prev_state = state
-        state = next_state
-
-    if state == ERROR_STATE:
-        bad_char = programa[posicion]
-
-        if prev_state == 1 and bad_char.isalpha():
-            # num formation error
-            line_start = programa.rfind('\n', 0, posicion) + 1
-            line_end = programa.rfind('\n', posicion)
-            if line_end == -1:
-                line_end = progLong
-            source_line = programa[line_start:line_end]
-            col_in_line = posicion - line_start
-
-            print(f"\nLinea {lineno}: Error al formar un numero: '{lexema}{bad_char}'")
-            print(source_line) # Error Line
-            print(' ' * col_in_line + '^') # Error marker
-
-            posicion   += 1
-            token       = TokenType.ERROR
-            tokenString = lexema + bad_char
-
-            if imprime:
-                print(f"{lineno}\t{token}\t= '{tokenString}'")
-            return token, tokenString
-
-        elif prev_state == 2 and bad_char.isdigit():
-            # digit immediately after an identifier → error
-            line_start  = programa.rfind('\n', 0, posicion) + 1
-            line_end    = programa.find('\n', posicion)
-            if line_end == -1:
-                line_end = progLong
-            source_line = programa[line_start:line_end]
-            col_in_line = posicion - line_start
-
-            print(f"\nLínea {lineno}: Error al formar un ID: '{lexema}{bad_char}'")
-            print(source_line)
-            print(' ' * col_in_line + '^')
-
-            posicion   += 1
-            token       = TokenType.ERROR
-            tokenString = lexema + bad_char
-            if imprime:
-                print(f"{lineno}\t{token}\t= '{tokenString}'")
-            return token, tokenString
-
-        elif prev_state == 9:
-            # exclamation mark alone → error
-            line_start  = programa.rfind('\n', 0, posicion) + 1
-            line_end    = programa.find('\n', posicion)
-            if line_end == -1:
-                line_end = progLong
-            source_line = programa[line_start:line_end]
-            col_in_line = posicion - line_start
-
-            print(f"\nLínea {lineno}: Error lexico, exclamacion debe llevar un signo igual despues: '{lexema}{bad_char}'")
-            print(source_line)
-            print(' ' * col_in_line + '^')
-
-            posicion   += 1
-            token       = TokenType.ERROR
-            tokenString = lexema + bad_char
-            if imprime:
-                print(f"{lineno}\t{token}\t= '{tokenString}'")
-            return token, tokenString
-
-
-        elif prev_state in (1,2):
-            # We were mid-token (NUM or ID) and hit an invalid continuation.
-            # The lexema is already built; resolve the token type normally.
-            token = ACCEPTING_STATE_TOKEN.get(
-                {1: 10, 2: 11}.get(prev_state, prev_state),
-                TokenType.ERROR
-            )
-            if token == TokenType.ID:
-                token = RESERVED_WORDS.get(lexema, TokenType.ID)
-            tokenString = lexema
-            if imprime:
-                print(f"{lineno}\t{token}\t= '{tokenString}'")
-            return token, tokenString
-
-        else:
-        # True error: unexpected character at START state
+        if state == ERROR_STATE:
             bad_char = programa[posicion]
-            line_start = programa.rfind('\n', 0, posicion) + 1
-            line_end   = programa.find('\n', posicion)
-            if line_end == -1:
-                line_end = progLong
-            source_line = programa[line_start:line_end]
-            col_in_line = posicion - line_start
 
-            print(f"\nLínea {lineno}: Error léxico – carácter inesperado: '{bad_char}'")
-            print(source_line)
-            print(' ' * col_in_line + '^')
+            if prev_state == 1 and bad_char.isalpha():
+                # num formation error
+                line_start = programa.rfind('\n', 0, posicion) + 1
+                line_end = programa.rfind('\n', posicion)
+                if line_end == -1:
+                    line_end = progLong
+                source_line = programa[line_start:line_end]
+                col_in_line = posicion - line_start
 
-            # Recovery: skip the bad character and continue scanning
-            posicion += 1
-            if bad_char == '\n':
-                lineno += 1
-            token       = TokenType.ERROR
-            tokenString = bad_char
-            if imprime:
-                print(f"{lineno}\t{token}\t= '{tokenString}'")
-            return token, tokenString
+                print(f"\nLinea {lineno}: Error al formar un numero: '{lexema}{bad_char}'")
+                print(source_line) # Error Line
+                print(' ' * col_in_line + '^') # Error marker
 
-    # Normal accepting state
-    token = ACCEPTING_STATE_TOKEN[state]
+                posicion   += 1
+                token       = TokenType.ERROR
+                tokenString = lexema + bad_char
 
-    # lexema always reflects the actual source text.
-    if token not in (TokenType.NUM, TokenType.ID):
-        tokenString = token.value          # e.g. '+', '<=', …
-    else:
-        tokenString = lexema
+                if imprime:
+                    print(f"{lineno}\t{token}\t= '{tokenString}'")
+                return token, tokenString
 
-        # Check reserved words for IDs
-        if token == TokenType.ID:
-            token = RESERVED_WORDS.get(tokenString, TokenType.ID)
+            elif prev_state == 2 and bad_char.isdigit():
+                # digit immediately after an identifier → error
+                line_start  = programa.rfind('\n', 0, posicion) + 1
+                line_end    = programa.find('\n', posicion)
+                if line_end == -1:
+                    line_end = progLong
+                source_line = programa[line_start:line_end]
+                col_in_line = posicion - line_start
 
-    if imprime:
-        print(f"{lineno}\t{token}\t= '{tokenString}'")
+                print(f"\nLínea {lineno}: Error al formar un ID: '{lexema}{bad_char}'")
+                print(source_line)
+                print(' ' * col_in_line + '^')
 
-    return token, tokenString
+                posicion   += 1
+                token       = TokenType.ERROR
+                tokenString = lexema + bad_char
+                if imprime:
+                    print(f"{lineno}\t{token}\t= '{tokenString}'")
+                return token, tokenString
+
+            elif prev_state == 9:
+                # exclamation mark alone → error
+                line_start  = programa.rfind('\n', 0, posicion) + 1
+                line_end    = programa.find('\n', posicion)
+                if line_end == -1:
+                    line_end = progLong
+                source_line = programa[line_start:line_end]
+                col_in_line = posicion - line_start
+
+                print(f"\nLínea {lineno}: Error lexico, exclamacion debe llevar un signo igual despues: '{lexema}{bad_char}'")
+                print(source_line)
+                print(' ' * col_in_line + '^')
+
+                posicion   += 1
+                token       = TokenType.ERROR
+                tokenString = lexema + bad_char
+                if imprime:
+                    print(f"{lineno}\t{token}\t= '{tokenString}'")
+                return token, tokenString
+
+
+            elif prev_state in (1,2):
+                # We were mid-token (NUM or ID) and hit an invalid continuation.
+                # The lexema is already built; resolve the token type normally.
+                token = ACCEPTING_STATE_TOKEN.get(
+                    {1: 10, 2: 11}.get(prev_state, prev_state),
+                    TokenType.ERROR
+                )
+                if token == TokenType.ID:
+                    token = RESERVED_WORDS.get(lexema, TokenType.ID)
+                tokenString = lexema
+                if imprime:
+                    print(f"{lineno}\t{token}\t= '{tokenString}'")
+                return token, tokenString
+
+            else:
+            # True error: unexpected character at START state
+                bad_char = programa[posicion]
+                line_start = programa.rfind('\n', 0, posicion) + 1
+                line_end   = programa.find('\n', posicion)
+                if line_end == -1:
+                    line_end = progLong
+                source_line = programa[line_start:line_end]
+                col_in_line = posicion - line_start
+
+                print(f"\nLínea {lineno}: Error léxico – carácter inesperado: '{bad_char}'")
+                print(source_line)
+                print(' ' * col_in_line + '^')
+
+                # Recovery: skip the bad character and continue scanning
+                posicion += 1
+                if bad_char == '\n':
+                    lineno += 1
+                token       = TokenType.ERROR
+                tokenString = bad_char
+                if imprime:
+                    print(f"{lineno}\t{token}\t= '{tokenString}'")
+                return token, tokenString
+
+        # Normal accepting state
+        token = ACCEPTING_STATE_TOKEN[state]
+
+        # If it's a comment, skip it and continue the loop
+        if token == TokenType.TKN_COMMENT:
+            continue
+
+        # lexema always reflects the actual source text.
+        if token not in (TokenType.NUM, TokenType.ID):
+            tokenString = token.value          # e.g. '+', '<=', …
+        else:
+            tokenString = lexema
+
+            # Check reserved words for IDs
+            if token == TokenType.ID:
+                token = RESERVED_WORDS.get(tokenString, TokenType.ID)
+
+        if imprime:
+            print(f"{lineno}\t{token}\t= '{tokenString}'")
+
+        return token, tokenString
