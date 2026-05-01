@@ -1,2 +1,5 @@
 __pycache__
 .git
+node_modules
+package.json
+package-lock.json
