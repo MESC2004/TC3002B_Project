@@ -95,6 +95,7 @@ def match(expected):
 
 # ---------------------------------------------------------------------------
 # Grammar Implementation
+# (EBNF functions)
 # ---------------------------------------------------------------------------
 
 def program():
@@ -261,15 +262,15 @@ def statement():
     elif tokenString == '{': 
         return compound_stmt()
     elif token in (TokenType.ID, TokenType.NUM, TokenType.TKN_OPEN) or tokenString == '(':
-        # Solo intentar expression_stmt si el token puede iniciar una expresión
+        # Only if new exp can be made (panic mode)
         return expression_stmt()
     elif token == TokenType.TKN_CLOSE and tokenString != '}':
-        # Es un ) o ] huérfano
+        # ) or ] orphan (close with no open)
         sync = {TokenType.TKN_SMC, TokenType.IF, TokenType.WHILE, TokenType.RETURN, TokenType.TKN_CLOSE, TokenType.ENDFILE}
         syntaxError(f"delimitador de cierre '{tokenString}' huérfano o inesperado", sync)
         return None
     else:
-        # Si es basura o un error léxico, no asumir que es una expresión
+        # Fallback to not assume expressions
         sync = {TokenType.TKN_SMC, TokenType.IF, TokenType.WHILE, TokenType.RETURN, TokenType.TKN_CLOSE, TokenType.ENDFILE}
         syntaxError(f"se encontró un token inesperado '{tokenString}' fuera de una sentencia válida", sync)
         return None
@@ -471,5 +472,5 @@ def parser(imprime=True):
     return ast
 
 def globales(prog, pos, long):
-    # Forzar el reinicio de la instancia correcta del lexer
+    # Forzar el reinicio de la instancia correcta del lexer (GLOBALS)
     lex.globales(prog, pos, long)
