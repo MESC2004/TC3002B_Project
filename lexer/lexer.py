@@ -91,7 +91,7 @@ TABLE = [
 ]
 
 # States that are accepting AND require the last character to be "put back"
-# AKA, the character that caused the state to go back to 0 is not part of the token (+1 or not in the if)
+# AKA, the character that caused the state toSolicitud http desde desde el equipo hacia la página web en el router central. go back to 0 is not part of the token (+1 or not in the if)
 # OPTIMIZATION FROM FEEDBACK FROM CLAUDE, makes code more readable and clean
 UNGET_STATES = {10, 11, 15, 16, 17, 19, 20, 22, 29}
 
@@ -260,14 +260,11 @@ def getToken(imprime: bool = True):
             continue
 
         # lexema always reflects the actual source text.
-        if token not in (TokenType.NUM, TokenType.ID):
-            tokenString = token.value          # e.g. '+', '<=', …
-        else:
-            tokenString = lexema
+        tokenString = lexema
 
-            # Check reserved words for IDs
-            if token == TokenType.ID:
-                token = RESERVED_WORDS.get(tokenString, TokenType.ID)
+        # Check reserved words for IDs
+        if token == TokenType.ID:
+            token = RESERVED_WORDS.get(tokenString, TokenType.ID)
 
         if imprime:
             print(f"{lineno}\t{token}\t= '{tokenString}'")
