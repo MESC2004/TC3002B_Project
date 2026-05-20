@@ -1,14 +1,6 @@
-import sys, os
-
-# Ajustar paths para importar lexer y parser
-root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, root)
-sys.path.insert(1, os.path.join(root, 'lexer'))
-sys.path.insert(2, os.path.join(root, 'parser'))
-
-import lexer.lexer as lex
-from parser.Parser import parser, globales
-import semantica.analyze as analyze
+import lexer as lex
+from Parser import parser, globales
+import analyze
 
 def run(file_path):
     with open(file_path, 'r') as f:
@@ -25,10 +17,7 @@ def run(file_path):
         return
 
     print("\nConstruyendo tabla de símbolos...")
-    analyze.buildSymtab(syntaxTree, imprime=True)
-
-    print("\nVerificando tipos...")
-    analyze.typeCheck(syntaxTree)
+    analyze.semantica(syntaxTree, imprime=True)
 
     if not analyze.Error:
         print("\nAnálisis semántico completado sin errores.")
@@ -36,5 +25,6 @@ def run(file_path):
         print("\nSe encontraron errores semánticos.")
 
 if __name__ == '__main__':
-    file_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, 'lexer', 'sample.c-')
+    import sys
+    file_path = sys.argv[1] if len(sys.argv) > 1 else 'sample.c-'
     run(file_path)

@@ -1,15 +1,13 @@
 # analyze.py — Análisis semántico para C-
-# Sigue el patrón de SemanticaTiny/analyze.py
 
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'parser'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lexer'))
-
+import lexer as lex
 from globalTypes import TokenType
 from Parser import NodeKind, StmtKind, ExpKind, DeclKind
-from symtab import scope_enter, scope_exit, st_insert, st_lookup, st_lookup_current, printSymTab
+from symtab import scope_enter, scope_exit, st_insert, st_lookup, st_lookup_current, printSymTab, _all_entries, _scopes
 
 Error = False
+_current_function = None  # Track current function for return type checking
+_top_level_decls = []     # Track top-level declarations
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -17,8 +15,29 @@ Error = False
 
 def semanticError(t, message):
     global Error
-    lineno = t.lineno if t else '?'
-    print(f"Error semántico en línea {lineno}: {message}")
+    lineno = t.lineno if t else 1
+    
+    # Try to find a better line number by searching for the token (ignore comments)
+    token_pos = 0
+    if hasattr(t, 'attr') and t.attr and hasattr(lex, 'programa') and lex.programa:
+        lines = lex.programa.split('\n')
+        for i, line in enumerate(lines, 1):
+            # Remove comments from line for searching
+            code_part = line.split('/*')[0]  # Remove /* ... */ comments
+            if str(t.attr) in code_part:
+                lineno = i
+                token_pos = code_part.find(str(t.attr))
+                break
+    
+    print(f"Línea {lineno}: Error semántico: {message}")
+    
+    # Find and print source line with caret
+    if hasattr(lex, 'programa') and lex.programa:
+        lines = lex.programa.split('\n')
+        if 1 <= lineno <= len(lines):
+            print(lines[lineno - 1])
+            print(' ' * token_pos + '^')
+    
     Error = True
 
 def traverse(t, preProc, postProc):
@@ -52,16 +71,22 @@ def _insert_builtins():
 
 def insertNode(t):
     """Inserta declaraciones e identificadores en la tabla de símbolos."""
+    global _current_function, _top_level_decls
     if t.nodekind == NodeKind.DECL:
         if t.kind == DeclKind.FUN:
             if st_lookup_current(t.attr) is not None:
                 semanticError(t, f"función '{t.attr}' ya declarada en este scope")
             else:
                 st_insert(t.attr, t.lineno, t.type, 'fun')
+                if len(_scopes) == 1:  # top-level
+                    _top_level_decls.append(t)
+            _current_function = t
             scope_enter()
         elif t.kind == DeclKind.VAR:
             name = t.attr if isinstance(t.attr, str) else t.attr[0]
-            if st_lookup_current(name) is not None:
+            if t.type == 'void':
+                semanticError(t, f"variable '{name}' no puede ser de tipo void")
+            elif st_lookup_current(name) is not None:
                 semanticError(t, f"variable '{name}' ya declarada en este scope")
             else:
                 st_insert(name, t.lineno, t.type, 'var')
@@ -82,7 +107,7 @@ def insertNode(t):
             if entry is None:
                 semanticError(t, f"identificador '{name}' no declarado")
             else:
-                st_insert(name, t.lineno, entry['type'], entry['kind'], entry['loc'])
+                entry['lines'].append(t.lineno)
         elif t.kind == ExpKind.CALL:
             entry = st_lookup(t.attr)
             if entry is None:
@@ -90,12 +115,14 @@ def insertNode(t):
             elif entry['kind'] != 'fun':
                 semanticError(t, f"'{t.attr}' no es una función")
             else:
-                st_insert(t.attr, t.lineno, entry['type'], entry['kind'], entry['loc'])
+                entry['lines'].append(t.lineno)
 
 def exitNode(t):
     """Cierra scopes al salir de funciones y bloques compuestos."""
+    global _current_function
     if t.nodekind == NodeKind.DECL and t.kind == DeclKind.FUN:
         scope_exit()
+        _current_function = None
     elif t.nodekind == NodeKind.STMT and t.kind == StmtKind.COMPOUND:
         if not getattr(t, '_fun_scope', False):
             scope_exit()
@@ -112,10 +139,17 @@ def _mark_fun_compound(t):
         _mark_fun_compound(child)
     _mark_fun_compound(t.sibling)
 
-def buildSymtab(syntaxTree, imprime=True):
+def tabla(syntaxTree, imprime=True):
+    global _top_level_decls
+    _top_level_decls = []
     _insert_builtins()
     _mark_fun_compound(syntaxTree)
     traverse(syntaxTree, insertNode, exitNode)
+    
+    # Check main is last declaration
+    if _top_level_decls and _top_level_decls[-1].attr != 'main':
+        semanticError(_top_level_decls[-1], "la función 'main' debe ser la última declaración")
+    
     if imprime:
         print()
         print("Tabla de Símbolos:")
@@ -149,8 +183,34 @@ def checkNode(t):
         elif t.kind == ExpKind.CALL:
             entry = st_lookup(t.attr)
             t.type = entry['type'] if entry else 'void'
+            
+            # Check argument count (skip builtins)
+            if entry and entry['loc'] is not None:
+                # Find function declaration to count parameters
+                for name, depth, info in _all_entries:
+                    if name == t.attr and info['kind'] == 'fun' and depth == 0:
+                        # Count parameters in same scope as function
+                        param_count = sum(1 for n, d, i in _all_entries 
+                                        if i['kind'] == 'param' and d == depth + 1)
+                        
+                        # Count arguments
+                        arg_count = 0
+                        if t.child and t.child[0].kind != "Args":  # not empty args
+                            arg_count = len(t.child[0].child) if t.child[0].child else 1
+                        
+                        if arg_count != param_count:
+                            semanticError(t, f"función '{t.attr}' espera {param_count} argumentos, recibió {arg_count}")
+                        break
     elif t.nodekind == NodeKind.STMT:
-        if t.kind == StmtKind.IF:
+        if t.kind == StmtKind.RETURN:
+            ret_type = t.child[0].type if t.child else 'void'
+            if _current_function:
+                expected = _current_function.type
+                if expected == 'void' and ret_type != 'void':
+                    semanticError(t, "función void no puede retornar un valor")
+                elif expected != 'void' and ret_type == 'void':
+                    semanticError(t, f"función '{expected}' debe retornar un valor")
+        elif t.kind == StmtKind.IF:
             cond = t.child[0].type if t.child else None
             if cond == 'void':
                 semanticError(t.child[0], "condición del if no puede ser void")
@@ -161,3 +221,10 @@ def checkNode(t):
 
 def typeCheck(syntaxTree):
     traverse(syntaxTree, nullProc, checkNode)
+
+def semantica(syntaxTree, imprime=True):
+    """Public interface: builds symbol table then runs type checking."""
+    tabla(syntaxTree, imprime)
+    if imprime:
+        print("\nVerificando tipos...")
+    typeCheck(syntaxTree)

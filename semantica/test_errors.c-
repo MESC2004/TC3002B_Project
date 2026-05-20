@@ -1,0 +1,11 @@
+/* Test file with semantic errors */
+void badVar;  /* void variable */
+int test(int x) {
+    return;   /* void return in int function */
+}
+int main(void) {
+    int y;
+    y = undeclared;  /* undeclared variable */
+    test(1, 2);      /* wrong argument count */
+    return 42;       /* int return in void function - wait, main is void */
+}
