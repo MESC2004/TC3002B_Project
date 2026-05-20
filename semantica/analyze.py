@@ -17,13 +17,19 @@ def semanticError(t, message):
     global Error
     lineno = t.lineno if t else 1
     
-    # Try to find a better line number by searching for the token (ignore comments)
+    # Try to find a better line number by searching for the token in code lines
     token_pos = 0
     if hasattr(t, 'attr') and t.attr and hasattr(lex, 'programa') and lex.programa:
         lines = lex.programa.split('\n')
         for i, line in enumerate(lines, 1):
-            # Remove comments from line for searching
-            code_part = line.split('/*')[0]  # Remove /* ... */ comments
+            # Skip comment lines and empty lines
+            stripped = line.strip()
+            if (stripped.startswith('/*') or stripped.startswith('*') or 
+                stripped.endswith('*/') or not stripped):
+                continue
+            
+            # Remove inline comments
+            code_part = line.split('/*')[0]
             if str(t.attr) in code_part:
                 lineno = i
                 token_pos = code_part.find(str(t.attr))
