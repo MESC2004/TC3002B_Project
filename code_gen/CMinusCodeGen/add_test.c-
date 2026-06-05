@@ -1,0 +1,17 @@
+/* Simple addition test */
+
+int suma(int a, int b)
+{
+    return a + b;
+}
+
+void main(void)
+{
+    int x;
+    int y;
+    int result;
+    x = input();
+    y = input();
+    result = suma(x, y);
+    output(result);
+}
